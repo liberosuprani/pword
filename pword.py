@@ -26,6 +26,9 @@ def pword(args: list):
     if "-p" in args:
         parallelization = args[args.index("-p")+1]
         
+    if "-w" not in args:
+        raise Exception("Argument -w must be provided")
+    
     word = args[args.index("-w")+1]
     
     file_list = args[

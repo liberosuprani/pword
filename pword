@@ -5,11 +5,10 @@ PROGRAM="pword.py" # Nao pode modificar esta variavel
     
 #TODO Validar o número de argumentos antes de chamar o Python (Ver TP02)
 
-# if [ $# -lt 2 ] then
-#     echo "Numero de argumentos invalido. Devem ser passados no
-#     minimo 2 argumentos ('-w palavra' e '{ficheiros}')"
-# ----------
-
+if [ $# -lt 2 ]; then
+    echo "Numero de argumentos invalido. Devem ser passados no
+    minimo 2 argumentos ('-w palavra' e '{ficheiros}')"
+fi
 
 #TO-DO: Validar que o ficheiro $PROGRAM existe antes de chama-lo (Ver TP02)
 
