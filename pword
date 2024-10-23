@@ -1,16 +1,88 @@
 #!/bin/bash
+
+# ex: ./pword -m c -p 1 -w exemplo ficheiro1.txt
+
 PYTHON="python3" # Pode-se modificar esta variavel, se necessario
 PROGRAM="pword.py" # Nao pode modificar esta variavel
 
-    
-#TODO Validar o número de argumentos antes de chamar o Python (Ver TP02)
+readonly DEFAULT_MODE="c"
+readonly DEFAULT_PARALLELIZATION=1
+readonly VALID_MODES=("c" "l" "i")
 
-if [ $# -lt 2 ]; then
-    echo "Numero de argumentos invalido. Devem ser passados no
-    minimo 2 argumentos ('-w palavra' e '{ficheiros}')"
+readonly OPTIONS=":m:p:w:"
+
+mode=$DEFAULT_MODE
+parallelization=$DEFAULT_PARALLELIZATION
+word=0
+
+validate_mode() {
+    for m in "${VALID_MODES[@]}"; do
+        if [ "$1" == "$m" ]; then
+            return 0            
+        fi
+    done
+    return 1
+}
+
+validate_parallelization() {
+    if [[ "$1" =~ ^[0-9]+$ && "$1" -gt 0 ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+while getopts $OPTIONS option; do
+    case $option in
+        m)
+            mode=$OPTARG
+            validate_mode "$mode"
+            is_valid=$?
+            if [ $is_valid -eq 1 ]; then
+                echo "Argumento invalido. (-$option $mode)"
+                exit 1 
+            fi
+            ;;
+        p)
+            parallelization=$OPTARG
+            validate_parallelization "$parallelization"
+            is_valid=$?
+            if [ $is_valid -eq 1 ]; then
+                echo "Argumento invalido. (-${option} ${parallelization})"
+                exit 1
+            fi
+            ;;
+        w)
+            word=$OPTARG
+            ;;
+        :)
+            echo "Opcao -${OPTARG} fornecida sem argumentos."
+            exit 1
+            ;;
+        ?)
+            echo "Opcao invalida: -${OPTARG}."
+            exit 1
+            ;;
+    esac
+done
+
+shift $((OPTIND - 1))
+files=("$@")
+
+if [ "$word" == 0 ]; then
+    echo "Opcao -w deve ser fornecida."
+    exit 1
 fi
 
-#TO-DO: Validar que o ficheiro $PROGRAM existe antes de chama-lo (Ver TP02)
+if [ ${#files} -lt 1 ]; then
+    echo "Deve ser fornecido o nome de pelo menos 1 ficheiro."
+    exit 1
+fi
 
-${PYTHON} ${PROGRAM} "$@"
-# ----------
+if test -a ${PROGRAM}; then
+    args=("$mode" "$parallelization" "$word" "${files[@]}")
+    ${PYTHON} ${PROGRAM} "${args[@]}"
+else
+    echo "Ficheiro ${PROGRAM} nao existe."
+    exit 1
+fi
