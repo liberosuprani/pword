@@ -1,20 +1,20 @@
 #!/bin/bash
 
-# ex: ./pword -m c -p 1 -w exemplo ficheiro1.txt
-
 PYTHON="python3" # Pode-se modificar esta variavel, se necessario
 PROGRAM="pword.py" # Nao pode modificar esta variavel
 
+# constants
 readonly DEFAULT_MODE="c"
 readonly DEFAULT_PARALLELIZATION=1
 readonly VALID_MODES=("c" "l" "i")
-
 readonly OPTIONS=":m:p:w:"
 
+# initializing variables with their default value
 mode=$DEFAULT_MODE
 parallelization=$DEFAULT_PARALLELIZATION
 word=0
 
+# checks whether the value given in -m is one of the valid modes
 validate_mode() {
     for m in "${VALID_MODES[@]}"; do
         if [ "$1" == "$m" ]; then
@@ -24,6 +24,7 @@ validate_mode() {
     return 1
 }
 
+# checks whether the value given in -p is a positive integer number
 validate_parallelization() {
     if [[ "$1" =~ ^[0-9]+$ && "$1" -gt 0 ]]; then
         return 0
@@ -39,7 +40,7 @@ while getopts $OPTIONS option; do
             validate_mode "$mode"
             is_valid=$?
             if [ $is_valid -eq 1 ]; then
-                echo "Argumento invalido. (-$option $mode)"
+                echo "Invalid argument. (-$option $mode)"
                 exit 1 
             fi
             ;;
@@ -48,7 +49,7 @@ while getopts $OPTIONS option; do
             validate_parallelization "$parallelization"
             is_valid=$?
             if [ $is_valid -eq 1 ]; then
-                echo "Argumento invalido. (-${option} ${parallelization})"
+                echo "Invalid argument. (-${option} ${parallelization})"
                 exit 1
             fi
             ;;
@@ -56,26 +57,31 @@ while getopts $OPTIONS option; do
             word=$OPTARG
             ;;
         :)
-            echo "Opcao -${OPTARG} fornecida sem argumentos."
+            echo "Option -${OPTARG} provided with no arguments."
             exit 1
             ;;
         ?)
-            echo "Opcao invalida: -${OPTARG}."
+            echo "Invalid option: -${OPTARG}."
             exit 1
             ;;
     esac
 done
 
+# points to the last argument given through the command line
+# in this case, the file or files
 shift $((OPTIND - 1))
+
 files=("$@")
 
+# no word was given
 if [ "$word" == 0 ]; then
-    echo "Opcao -w deve ser fornecida."
+    echo "Option -w must be passed."
     exit 1
 fi
 
+# number of files less than 1 (no files were given)
 if [ ${#files} -lt 1 ]; then
-    echo "Deve ser fornecido o nome de pelo menos 1 ficheiro."
+    echo "At least 1 filename should be provided"
     exit 1
 fi
 
@@ -83,6 +89,6 @@ if test -a ${PROGRAM}; then
     args=("$mode" "$parallelization" "$word" "${files[@]}")
     ${PYTHON} ${PROGRAM} "${args[@]}"
 else
-    echo "Ficheiro ${PROGRAM} nao existe."
+    echo "The file ${PROGRAM} does not exist."
     exit 1
 fi
