@@ -18,7 +18,7 @@ word=0
 validate_mode() {
     for m in "${VALID_MODES[@]}"; do
         if [ "$1" == "$m" ]; then
-            return 0            
+            return 0
         fi
     done
     return 1
@@ -89,6 +89,7 @@ if test -a ${PROGRAM}; then
     args=("$mode" "$parallelization" "$word" "${files[@]}")
     ${PYTHON} ${PROGRAM} "${args[@]}"
 else
+    # shellcheck disable=SC1017
     echo "The file ${PROGRAM} does not exist."
     exit 1
 fi
