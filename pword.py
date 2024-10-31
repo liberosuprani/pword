@@ -34,6 +34,14 @@ def divide_content(filename: str, n_of_processes: int, word: str, mode: str):
     with open(filename, 'r', encoding='utf-8') as f:
         lines = f.readlines()
         n_of_lines = len(lines)
+        
+        if n_of_lines == 0:
+            find_word_in_text(word, "", mode)
+            return
+        
+        if n_of_processes > n_of_lines:
+            n_of_processes = n_of_lines
+        
         division = n_of_lines // n_of_processes
         rest = n_of_lines % n_of_processes
 
@@ -52,12 +60,13 @@ def divide_content(filename: str, n_of_processes: int, word: str, mode: str):
             pos += 1
             if pos == n_of_processes:
                 pos = 0
-        
+            
+        start_pos = 0
+        finish_pos = 0
         # passes the exact lines each process is gonna handle, based in lines_per_process
         for i in range(n_of_processes):
-            a = 0 if i == 0 else lines_per_process[i-1]
-            b = lines_per_process[0] if i == 0 else lines_per_process[i-1]+lines_per_process[i]
-            lines_args = lines[a:b]
+            finish_pos = start_pos + lines_per_process[i]
+            lines_args = lines[start_pos:finish_pos]
             
             text = ""
             for line in lines_args:
@@ -65,7 +74,10 @@ def divide_content(filename: str, n_of_processes: int, word: str, mode: str):
             
             p = Process(target=find_word_in_text, args=(word, text, mode))
             process_list.append(p)
+            
             p.start()
+            
+            start_pos = finish_pos
        
     for p in process_list:
         p.join()
@@ -118,12 +130,17 @@ def assign_files_to_processes(files: list, n_of_processes: int, word: str, mode:
         file_obj_list = []  
         for i, file in enumerate(files):
             with open(file, 'r', encoding="utf-8") as f:
+                # text = f.read().strip()
+                # if text == "":
+                #     raise Exception("Ficheiro sem texto!")
+                # f.seek(0)
+                
                 lines = f.readlines()
                 file_obj_list.append(FileObj(name=file, size=len(lines)))
 
         # file_obj_list.sort(key=lambda file_obj:file_obj.size, reverse=True)
     
-        file_group_list = [[] for i in range(n_of_processes)] # [[], [], []]
+        file_group_list = [[] for i in range(n_of_processes)] # [[], []]
         
         
         for file_obj in file_obj_list: 
