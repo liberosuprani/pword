@@ -198,7 +198,7 @@ def find_word_in_file(word: str, files: list, mode):
 
     for file in files:
         with open(file, 'r', encoding="utf-8") as f:
-            print(f"\n### Ficheiro '{file}' ###")
+            # print(f"\n### Ficheiro '{file}' ###")
             text = f.read()
             find_word_in_text(word, text, mode)
             

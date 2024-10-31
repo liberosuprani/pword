@@ -36,7 +36,7 @@ validate_parallelization() {
 while getopts $OPTIONS option; do
     case $option in
         h)
-            printf "Example: pword -m c -p 1 -w exemplo f1.txt\n(Mode) -m [c|l|i]\n(Parallelization) -p\n(Word) -w\n"
+            printf "Exemplo: pword -m c -p 1 -w exemplo f1.txt\n(Modo) -m [c|l|i]\n(Paralelizaçãp) -p\n(Palavra) -w\n"
             exit 1
             ;;
         m)
@@ -44,7 +44,7 @@ while getopts $OPTIONS option; do
             validate_mode "$mode"
             is_valid=$?
             if [ $is_valid -eq 1 ]; then
-                echo "Invalid argument. (-$option $mode)"
+                echo "Argumento inválido. (-$option $mode)"
                 exit 1 
             fi
             ;;
@@ -53,7 +53,7 @@ while getopts $OPTIONS option; do
             validate_parallelization "$parallelization"
             is_valid=$?
             if [ $is_valid -eq 1 ]; then
-                echo "Invalid argument. (-${option} ${parallelization})"
+                echo "Argumento inválido. (-${option} ${parallelization})"
                 exit 1
             fi
             ;;
@@ -61,11 +61,11 @@ while getopts $OPTIONS option; do
             word=$OPTARG
             ;;
         :)
-            echo "Option -${OPTARG} provided with no arguments."
+            echo "Opção -${OPTARG} passada sem argumentos."
             exit 1
             ;;
         ?)
-            echo "Invalid option: -${OPTARG}."
+            echo "Opção inválida: -${OPTARG}."
             exit 1
             ;;
     esac
@@ -79,13 +79,13 @@ files=("$@")
 
 # no word was given
 if [ "$word" == 0 ]; then
-    echo "Option -w must be passed."
+    echo "Opção -w é obrigatória."
     exit 1
 fi
 
 # number of files less than 1 (no files were given)
 if [ ${#files} -lt 1 ]; then
-    echo "At least 1 filename should be provided"
+    echo "Deve ser passado o nome de pelo menos 1 ficheiro."
     exit 1
 fi
 
@@ -93,7 +93,6 @@ if test -a ${PROGRAM}; then
     args=("$mode" "$parallelization" "$word" "${files[@]}")
     ${PYTHON} ${PROGRAM} "${args[@]}"
 else
-    # shellcheck disable=SC1017
-    echo "The file ${PROGRAM} does not exist."
+    echo "O ficheiro ${PROGRAM} não existe ou não pôde ser encontrado."
     exit 1
 fi
