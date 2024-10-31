@@ -7,7 +7,7 @@ PROGRAM="pword.py" # Nao pode modificar esta variavel
 readonly DEFAULT_MODE="c"
 readonly DEFAULT_PARALLELIZATION=1
 readonly VALID_MODES=("c" "l" "i")
-readonly OPTIONS=":m:p:w:"
+readonly OPTIONS=":hm:p:w:"
 
 # initializing variables with their default value
 mode=$DEFAULT_MODE
@@ -35,6 +35,10 @@ validate_parallelization() {
 
 while getopts $OPTIONS option; do
     case $option in
+        h)
+            printf "Example: pword -m c -p 1 -w exemplo f1.txt\n(Mode) -m [c|l|i]\n(Parallelization) -p\n(Word) -w\n"
+            exit 1
+            ;;
         m)
             mode=$OPTARG
             validate_mode "$mode"

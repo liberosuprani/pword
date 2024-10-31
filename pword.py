@@ -223,8 +223,8 @@ def pword(args: list):
 # --------------------------------------------------   
 
 def main(args):
-    print('Programa: pword.py')
-    print('Argumentos: ', args)
+    #print('Programa: pword.py')
+    #print('Argumentos: ', args)
     
     pword(args)
 
