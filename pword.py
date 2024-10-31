@@ -10,15 +10,28 @@ from multiprocessing import Process
 
 
 class FileObj:
+    '''
+    Representation of a file.
+    '''
     def __init__(self, name, size) -> None:
         self.name = name
         self.size = size
         
 
-def divide_content(file: str, n_of_processes: int, word: str, mode: str):
-    p_list = []
+def divide_content(filename: str, n_of_processes: int, word: str, mode: str):
+    '''
+    Divides the content of a given file between n-processes.
+    
+    Requires: 
+    - filename, word, mode str
+    - n_of_processes int
+    
+    Ensures:
+    - Creation and start of n-processes, where each process deals with a part of the content of the file.
+    '''
+    process_list = []
    
-    with open(file, 'r', encoding='utf-8') as f:
+    with open(filename, 'r', encoding='utf-8') as f:
         lines = f.readlines()
         n_of_lines = len(lines)
         division = n_of_lines // n_of_processes
@@ -51,17 +64,34 @@ def divide_content(file: str, n_of_processes: int, word: str, mode: str):
                 text += line
             
             p = Process(target=find_word_in_text, args=(word, text, mode))
-            p_list.append(p)
+            process_list.append(p)
             p.start()
        
-    for p in p_list:
+    for p in process_list:
         p.join()
                      
    
 def assign_files_to_processes(files: list, n_of_processes: int, word: str, mode: str):
+    '''
+    Divides the files among n-processes.
+    
+    Requires:
+    - files list
+    - n_of_processes int
+    - word, mode str
+    
+    Ensures:
+    - Creation and start of n-processes, where each process deals with 1 or more files.
+    '''
     def sum_files_sizes(files_list: list):
         '''
-        sums the sizes of the files in a group. if list is empty, returns 0
+        Sums the sizes of the files in a group. 
+        
+        Requires:
+        - files_list list
+        
+        Returns: 
+        Total amount of lines in list of files. If files_list is empty, returns 0. 
         '''
         res = 0
         if len(files_list) == 0:
@@ -70,7 +100,7 @@ def assign_files_to_processes(files: list, n_of_processes: int, word: str, mode:
             res += f.size
         return res
     
-    p_list = []
+    process_list = []
 
     if n_of_processes > len(files):
         n_of_processes = len(files)
@@ -79,9 +109,9 @@ def assign_files_to_processes(files: list, n_of_processes: int, word: str, mode:
     if n_of_processes == len(files):
         for i in range(n_of_processes):
             p = Process(target=find_word_in_file, args=(word, [files[i]], mode))
-            p_list.append(p)
+            process_list.append(p)
             p.start()
-        for p in p_list:
+        for p in process_list:
             p.join()
     
     else:
@@ -114,13 +144,22 @@ def assign_files_to_processes(files: list, n_of_processes: int, word: str, mode:
         
         for sub_list in files_sub_list:
             p = Process(target=find_word_in_file, args=(word, sub_list, mode))
-            p_list.append(p)
+            process_list.append(p)
             p.start()
-        for p in p_list:
+        for p in process_list:
             p.join()
   
             
-def find_word_in_text(word: str, text: str, mode, file = None): 
+def find_word_in_text(word: str, text: str, mode): 
+    '''
+    Finds a given word in a given text.
+    
+    Requires:
+    - word, text, mode str
+    
+    Ensures:
+    - Print of the amount of occurrences of the word in the text, depending of the mode chosen. 
+    '''
     count = 0
     if mode == 'c':
         count = text.count(word)
@@ -142,6 +181,9 @@ def find_word_in_text(word: str, text: str, mode, file = None):
     
     
 def find_word_in_file(word: str, files: list, mode):
+    '''
+    Calls find_word_in_text for every file in files.
+    '''
 
     for file in files:
         with open(file, 'r', encoding="utf-8") as f:
