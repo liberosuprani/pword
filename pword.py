@@ -129,19 +129,13 @@ def assign_files_to_processes(files: list, n_of_processes: int, word: str, mode:
     else:
         file_obj_list = []  
         for i, file in enumerate(files):
-            with open(file, 'r', encoding="utf-8") as f:
-                # text = f.read().strip()
-                # if text == "":
-                #     raise Exception("Ficheiro sem texto!")
-                # f.seek(0)
-                
+            with open(file, 'r', encoding="utf-8") as f:               
                 lines = f.readlines()
                 file_obj_list.append(FileObj(name=file, size=len(lines)))
 
         # file_obj_list.sort(key=lambda file_obj:file_obj.size, reverse=True)
     
         file_group_list = [[] for i in range(n_of_processes)] # [[], []]
-        
         
         for file_obj in file_obj_list: 
             lowest_index = 0
