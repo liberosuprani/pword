@@ -5,7 +5,7 @@
 
 --------------------------------------------------------
 ### Exemplos de comandos para executar o pwordcount:
-1) ./pword -m c -p 3 -w sistemas f1.txt 
+1) ./pword -p 3 -w sistemas f1.txt 
 2) ./pword -m l -w operativos f1.txt f2.txt
 3) ./pword -m i -p 2 -w informatica f1.txt f2.txt
 
