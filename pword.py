@@ -79,10 +79,11 @@ def divide_content(filename: str, n_of_processes: int, word: str, mode: str):
                 p.start()
                 
                 start_pos = finish_pos
+                
+            for p in process_list:
+                p.join()
     except FileNotFoundError:
         print(f"Erro! Ficheiro '{filename}' não encontrado.")    
-    for p in process_list:
-        p.join()
                      
    
 def assign_files_to_processes(files: list, n_of_processes: int, word: str, mode: str):
