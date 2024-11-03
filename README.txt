@@ -27,4 +27,4 @@ O critério para a divisão é o número de linhas em cada ficheiro.
 
 --------------------------------------------------------
 ### Outras informações pertinentes:
-- ...
+- Adicionamos uma opção -h para ajuda no comando pword, que dá um exemplo de comando para executar o programa e informa sobre as flags.

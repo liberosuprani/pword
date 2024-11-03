@@ -31,54 +31,56 @@ def divide_content(filename: str, n_of_processes: int, word: str, mode: str):
     '''
     process_list = []
    
-    with open(filename, 'r', encoding='utf-8') as f:
-        lines = f.readlines()
-        n_of_lines = len(lines)
-        
-        if n_of_lines == 0:
-            find_word_in_text(word, "", mode)
-            return
-        
-        if n_of_processes > n_of_lines:
-            n_of_processes = n_of_lines
-        
-        division = n_of_lines // n_of_processes
-        rest = n_of_lines % n_of_processes
+    try:
+        with open(filename, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+            n_of_lines = len(lines)
+            
+            if n_of_lines == 0:
+                find_word_in_text(word, "", mode)
+                return
+            
+            if n_of_processes > n_of_lines:
+                n_of_processes = n_of_lines
+            
+            division = n_of_lines // n_of_processes
+            rest = n_of_lines % n_of_processes
 
-        lines_per_process = [0 for i in range(n_of_processes)]
-       
-        # this cicle assigns the amount of lines from the each process is gonna receive,
-        # incrementing to each position of the array the result of division 
-        # (and +1 while there is rest available)
-        pos = 0
-        for i in range(0, n_of_lines-rest, division):
-            lines_per_process[pos] += division
-            if rest > 0:    
-                lines_per_process[pos] += 1
-                rest -= 1
-               
-            pos += 1
-            if pos == n_of_processes:
-                pos = 0
-            
-        start_pos = 0
-        finish_pos = 0
-        # passes the exact lines each process is gonna handle, based in lines_per_process
-        for i in range(n_of_processes):
-            finish_pos = start_pos + lines_per_process[i]
-            lines_args = lines[start_pos:finish_pos]
-            
-            text = ""
-            for line in lines_args:
-                text += line
-            
-            p = Process(target=find_word_in_text, args=(word, text, mode))
-            process_list.append(p)
-            
-            p.start()
-            
-            start_pos = finish_pos
-       
+            lines_per_process = [0 for i in range(n_of_processes)]
+        
+            # this cicle assigns the amount of lines from the each process is gonna receive,
+            # incrementing to each position of the array the result of division 
+            # (and +1 while there is rest available)
+            pos = 0
+            for i in range(0, n_of_lines-rest, division):
+                lines_per_process[pos] += division
+                if rest > 0:    
+                    lines_per_process[pos] += 1
+                    rest -= 1
+                
+                pos += 1
+                if pos == n_of_processes:
+                    pos = 0
+                
+            start_pos = 0
+            finish_pos = 0
+            # passes the exact lines each process is gonna handle, based in lines_per_process
+            for i in range(n_of_processes):
+                finish_pos = start_pos + lines_per_process[i]
+                lines_args = lines[start_pos:finish_pos]
+                
+                text = ""
+                for line in lines_args:
+                    text += line
+                
+                p = Process(target=find_word_in_text, args=(word, text, mode))
+                process_list.append(p)
+                
+                p.start()
+                
+                start_pos = finish_pos
+    except FileNotFoundError:
+        print(f"Erro! Ficheiro '{filename}' não encontrado.")    
     for p in process_list:
         p.join()
                      
@@ -117,24 +119,24 @@ def assign_files_to_processes(files: list, n_of_processes: int, word: str, mode:
     if n_of_processes > len(files):
         n_of_processes = len(files)
     
-    # creates and runs each process passing 1 file to it
+    # creates and runs each process passing exactly 1 file to it
     if n_of_processes == len(files):
         for i in range(n_of_processes):
-            p = Process(target=find_word_in_file, args=(word, [files[i]], mode))
+            p = Process(target=find_word_in_files, args=(word, [files[i]], mode))
             process_list.append(p)
             p.start()
         for p in process_list:
             p.join()
-    
     else:
+        # converts each file to a FileObj
         file_obj_list = []  
-        for i, file in enumerate(files):
-            with open(file, 'r', encoding="utf-8") as f:               
-                lines = f.readlines()
-                file_obj_list.append(FileObj(name=file, size=len(lines)))
-
-        # file_obj_list.sort(key=lambda file_obj:file_obj.size, reverse=True)
-    
+        for i, filename in enumerate(files):
+            try:
+                with open(filename, 'r', encoding="utf-8") as f:               
+                    lines = f.readlines()
+                    file_obj_list.append(FileObj(name=filename, size=len(lines)))
+            except FileNotFoundError:
+                print(f"Erro! Ficheiro '{filename}' não encontrado.")
         file_group_list = [[] for i in range(n_of_processes)] # [[], []]
         
         for file_obj in file_obj_list: 
@@ -154,7 +156,7 @@ def assign_files_to_processes(files: list, n_of_processes: int, word: str, mode:
         files_sub_list = [[f.name for f in file_group] for file_group in file_group_list]
         
         for sub_list in files_sub_list:
-            p = Process(target=find_word_in_file, args=(word, sub_list, mode))
+            p = Process(target=find_word_in_files, args=(word, sub_list, mode))
             process_list.append(p)
             p.start()
         for p in process_list:
@@ -191,17 +193,19 @@ def find_word_in_text(word: str, text: str, mode):
         print(f"Número de ocorrências: {count}")
     
     
-def find_word_in_file(word: str, files: list, mode):
+def find_word_in_files(word: str, files: list, mode):
     '''
     Calls find_word_in_text for every file in files.
     '''
 
-    for file in files:
-        with open(file, 'r', encoding="utf-8") as f:
-            # print(f"\n### Ficheiro '{file}' ###")
-            text = f.read()
-            find_word_in_text(word, text, mode)
-            
+    for filename in files:
+        try:
+            with open(filename, 'r', encoding="utf-8") as f:
+                # print(f"\n### Ficheiro '{file}' ###")
+                text = f.read()
+                find_word_in_text(word, text, mode)
+        except FileNotFoundError:
+            print(f"Erro! Ficheiro '{filename}' não encontrado.")
         
 def pword(args: list):
     mode = args[0]
