@@ -12,12 +12,14 @@ PROGRAM="pword.py"
 readonly DEFAULT_MODE="c"
 readonly DEFAULT_PARALLELIZATION=1
 readonly VALID_MODES=("c" "l" "i")
-readonly OPTIONS=":hm:p:w:"
+readonly OPTIONS=":hm:p:w:i:d:"
 
 # initializing variables with their default value
 mode=$DEFAULT_MODE
 parallelization=$DEFAULT_PARALLELIZATION
 word=0
+interval=3
+logfile= 'stdout'
 
 # checks whether the value given in -m is one of the valid modes
 validate_mode() {
@@ -41,7 +43,7 @@ validate_parallelization() {
 while getopts $OPTIONS option; do
     case $option in
         h)
-            printf "Exemplo: pword -m c -p 1 -w exemplo f1.txt\n(Modo) -m [c|l|i]\n(Paralelizaçãp) -p\n(Palavra) -w\n"
+            printf "Exemplo: pword -m c -p 1 -w exemplo f1.txt\n(Modo) -m [c|l|i]\n(Paralelização) -p\n(Palavra) -w\n"
             exit 1
             ;;
         m)
@@ -62,6 +64,16 @@ while getopts $OPTIONS option; do
                 exit 1
             fi
             ;;
+        i)
+            interval=$OPTARG
+            if [[ ! "$interval" =~ ^[0-9]+$ || "$interval" -le 0 ]]; then
+                echo "Argumento inválido. Deve ser um inteiro e positivo."
+                exit 1
+            fi
+            ;;
+        d);
+            logfile=$OPTARG
+            ;
         w)
             word=$OPTARG
             ;;
@@ -95,7 +107,7 @@ if [ ${#files} -lt 1 ]; then
 fi
 
 if test -a ${PROGRAM}; then
-    args=("$mode" "$parallelization" "$word" "${files[@]}")
+    args=("$mode" "$parallelization" "$word" "$interval" "$logfile" "${files[@]}")
     ${PYTHON} ${PROGRAM} "${args[@]}"
 else
     echo "O ficheiro ${PROGRAM} não existe ou não pôde ser encontrado."

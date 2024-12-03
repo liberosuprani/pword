@@ -8,7 +8,6 @@
 import sys
 from multiprocessing import Process
 
-
 class FileObj:
     '''
     Representation of a file.
@@ -218,7 +217,9 @@ def pword(args: list):
         divide_content(files[0], n_of_processes, word, mode)
     else:
         assign_files_to_processes(files, n_of_processes, word, mode)    
-         
+
+
+       
 # --------------------------------------------------   
 
 def main(args):
