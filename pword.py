@@ -6,7 +6,15 @@
 # ex: ./pword -m c -p 1 -w exemplo ficheiro1.txt
 
 import sys
-from multiprocessing import Process
+from multiprocessing import Process, Value, Array, Queue, Lock, Semaphore
+
+import signal, time, sys, os
+
+mutex = Lock()
+shared_counter = None
+n_of_processes = 0
+shared_found = Queue()
+
 
 class FileObj:
     '''
@@ -17,7 +25,7 @@ class FileObj:
         self.size = size
         
 
-def divide_content(filename: str, n_of_processes: int, word: str, mode: str):
+def divide_content(filename: str, word: str, mode: str):
     '''
     Divides the content of a given file between n-processes.
     
@@ -28,8 +36,10 @@ def divide_content(filename: str, n_of_processes: int, word: str, mode: str):
     Ensures:
     - Creation and start of n-processes, where each process deals with a part of the content of the file.
     '''
+    
+    global n_of_processes
     process_list = []
-   
+    
     try:
         with open(filename, 'r', encoding='utf-8') as f:
             lines = f.readlines()
@@ -47,7 +57,7 @@ def divide_content(filename: str, n_of_processes: int, word: str, mode: str):
 
             lines_per_process = [0 for i in range(n_of_processes)]
         
-            # this cicle assigns the amount of lines from the each process is gonna receive,
+            # this cicle assigns the amount of lines each process is gonna receive,
             # incrementing to each position of the array the result of division 
             # (and +1 while there is rest available)
             pos = 0
@@ -84,8 +94,7 @@ def divide_content(filename: str, n_of_processes: int, word: str, mode: str):
     except FileNotFoundError:
         print(f"Erro! Ficheiro '{filename}' não encontrado.")    
                      
-   
-def assign_files_to_processes(files: list, n_of_processes: int, word: str, mode: str):
+def assign_files_to_processes(files: list, word: str, mode: str):
     '''
     Divides the files among n-processes.
     
@@ -97,6 +106,9 @@ def assign_files_to_processes(files: list, n_of_processes: int, word: str, mode:
     Ensures:
     - Creation and start of n-processes, where each process deals with 1 or more files.
     '''
+    
+    global n_of_processes
+    
     def sum_files_sizes(files_list: list):
         '''
         Sums the sizes of the files in a group. 
@@ -149,7 +161,7 @@ def assign_files_to_processes(files: list, n_of_processes: int, word: str, mode:
                     lowest_sum = sum_files_sizes(file_group)
                     lowest_index = i
             
-            # appends the current file to the group with lowest amount of lines combined
+            # appends the current file to the group with the lowest amount of lines combined
             file_group_list[lowest_index].append(file_obj)
             
         # converts the file_objects in the groups to their respective names
@@ -173,19 +185,53 @@ def find_word_in_text(word: str, text: str, mode):
     Ensures:
     - Print of the amount of occurrences of the word in the text, depending of the mode chosen. 
     '''
-    count = 0
+    global shared_counter
+    global shared_found
+    global n_of_processes
+    lines_found = set()
+    
     if mode == 'c':
-        count = text.count(word)
-        print(f"Número de ocorrências: {count}")
+        # mutex start
+        mutex.acquire()
+        
+        if shared_counter == None:
+            shared_counter = Value("i", 0)
+            
+        shared_counter.value += text.count(word)
+        mutex.release()
+        # mutex end
+        
+        print(f"Número de ocorrências: {shared_counter.value}")
         
     elif mode == 'l':
+        # mutex start
+        mutex.acquire()
+        
+        if shared_counter == None:
+            shared_counter = Array("i", [0 for i in range(n_of_processes)])
+        
+        # finds the first array position whose value is 0 and assigns this position to the current Process
+        found_my_index = False
+        my_index = 0
+        my_index_iterator = 0
+        while not found_my_index:
+            found_my_index = True if shared_counter[my_index_iterator] == 0 else False
+            my_index = my_index_iterator 
+            my_index_iterator += 1
+        
         split_text = text.strip().split("\n")
         for line in split_text:
             if word in line:
-                count += 1
-        print(f"Número de ocorrências (linhas): {count}")
+                lines_found.add(line)
+                
+        shared_counter[my_index] = len(lines_found)
+                
+        mutex.release()
+        # mutex end
+        
+        print(f"Número de ocorrências (linhas): {shared_counter[my_index]}")
     
-    else:
+    elif mode == "i": #TODO falta implementar comunicação/sincronização nessa parte
         split_text = text.strip().split()
         for w in split_text:
             if word == w:
@@ -206,26 +252,47 @@ def find_word_in_files(word: str, files: list, mode):
                 find_word_in_text(word, text, mode)
         except FileNotFoundError:
             print(f"Erro! Ficheiro '{filename}' não encontrado.")
+
+
+
+
+
+
+
+
+        
+        
+# --------------------------------------------------  
+    
+
         
 def pword(args: list):
+    global n_of_processes
+    
     mode = args[0]
     n_of_processes = int(args[1])
+    # interval = args[2]                //TODO implementar essas paradas pra poder descomentá-las
+    # parcial_results_file = args[3]
+    # word = args[4]
+    # files = args[5:]
     word = args[2]
     files = args[3:]
+      
+
+    # if mode == "c":
+    #     shared_counter = Value("i", 0)
+        
+    # elif mode == "l":
+    #     shared_counter = Array()
 
     if len(files) == 1 and n_of_processes > 1: # 1 file and multiple processes
-        divide_content(files[0], n_of_processes, word, mode)
+        divide_content(files[0], word, mode)
     else:
-        assign_files_to_processes(files, n_of_processes, word, mode)    
+        assign_files_to_processes(files, word, mode)    
 
-
-       
 # --------------------------------------------------   
 
 def main(args):
-    #print('Programa: pword.py')
-    #print('Argumentos: ', args)
-    
     pword(args)
 
 
