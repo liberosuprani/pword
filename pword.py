@@ -14,6 +14,8 @@ mutex = Lock()
 shared_counter = None
 shared_found = Queue()
 my_index = -1
+process_list = []
+
 
 class FileObj:
     '''
@@ -38,7 +40,7 @@ def divide_content(filename: str, n_of_processes: int, word: str, mode: str):
     
     global shared_counter
     global my_index
-    process_list = []
+    global process_list
     
     try:
         with open(filename, 'r', encoding='utf-8') as f:
@@ -48,20 +50,6 @@ def divide_content(filename: str, n_of_processes: int, word: str, mode: str):
             if n_of_lines == 0:
                 find_word_in_text(word, "", mode)
                 return
-            
-            if n_of_processes > n_of_lines:
-                n_of_processes = n_of_lines
-            
-            # after knowing exatcly the number of processes that there will be, creates the shared_counter depending on the mode chosen
-            mutex.acquire()
-            if shared_counter == None:
-                if mode == "c":
-                    shared_counter = Value("i", 0)
-                else:
-                    shared_counter = Array("i", [-1 for i in range(n_of_processes)])
-                    find_my_index()
-                    shared_counter[my_index] = 0
-            mutex.release()
             
             division = n_of_lines // n_of_processes
             rest = n_of_lines % n_of_processes
@@ -138,21 +126,7 @@ def assign_files_to_processes(files: list, n_of_processes: int, word: str, mode:
     
     global shared_counter
     global my_index
-    process_list = []
-
-    if n_of_processes > len(files):
-        n_of_processes = len(files)
-    
-    # after knowing exatcly the number of processes that there will be, creates the shared_counter depending on the mode chosen
-    mutex.acquire()
-    if shared_counter == None:
-        if mode == "c":
-            shared_counter = Value("i", 0)
-        else:
-            shared_counter = Array("i", [-1 for i in range(n_of_processes)])
-            find_my_index()
-            shared_counter[my_index] = 0
-    mutex.release()
+    global process_list
     
     # creates and runs each process passing exactly 1 file to it
     if n_of_processes == len(files):
@@ -206,6 +180,7 @@ def find_my_index():
     of global variable my_index to this index
     """
     global my_index
+    print(f"my_index pid: {os.getpid()}")
     
     found_my_index = False
     my_index = 0
@@ -214,7 +189,7 @@ def find_my_index():
         found_my_index = True if shared_counter[my_index_iterator] == -1 else False
         my_index = my_index_iterator 
         my_index_iterator += 1
-        
+       
             
 def find_word_in_text(word: str, text: str, mode): 
     '''
@@ -229,6 +204,7 @@ def find_word_in_text(word: str, text: str, mode):
     global shared_counter
     global shared_found
     global my_index
+    counter = 0
     
     if mode == 'c':
         # mutex start
@@ -237,66 +213,110 @@ def find_word_in_text(word: str, text: str, mode):
         mutex.release()
         # mutex end
         print(f"Número de ocorrências: {shared_counter.value}")
+        return None
         
     elif mode == 'l':
-        lines_found = set()
+        lines_found = []
         # mutex start
         mutex.acquire()    
         split_text = text.strip().split("\n")
         for line in split_text:
             if word in line:
-                lines_found.add(line)      
+                lines_found.append(line)  
+                print(f"(253) line: {line}")    
         # increments the shared array in my_index position with the amount of lines found so far
-        shared_counter[my_index] += len(lines_found)         
+        print(f"(255) len(lines_found): {len(lines_found)}")
+        shared_counter[my_index] += len(lines_found)       
         mutex.release()
         # mutex end
-        print(f"Número de ocorrências (linhas): {shared_counter[my_index]}")
+        return set(lines_found)
     
     elif mode == "i":
         mutex.acquire()
         split_text = text.strip().split()
         for w in split_text:
             if word == w:
-                shared_counter[my_index] += 1
-            mutex.release()
+                counter += 1
+        
+        # puts the counter in the queue after each file/block was analyzed    
+        shared_found.put(counter)
+        shared_counter[my_index] += counter
+                
+        mutex.release()
         print(f"Número de ocorrências: {shared_counter[my_index]}")
+        return None
+
 
 def find_word_in_block(word: str, block: str, mode):
     global my_index
+    global shared_counter
     
-    find_word_in_text(word, block, mode)
-    
-    # if mode is "l", put in the queue the counter after the block was analyzed
-    if mode == "l" or mode == "i":
-        shared_found.put(shared_counter[my_index])
+    if mode != "c":
+        print(f"(256) sou do tipo Array")
+        find_my_index()
+        shared_counter[my_index] = 0
         
+    lines_found = []
+    result = find_word_in_text(word, block, mode)
+    
+    if mode == "l":
+        lines_found.extend(result)
+        for lines in lines_found:
+            shared_found.put(lines)
+    
     
 def find_word_in_files(word: str, files: list, mode):
     '''
     Calls find_word_in_text for every file in files.
     '''
     global my_index
-
+    global shared_counter
+    
+    if mode != "c":
+        find_my_index()
+        print(f"(256) sou do tipo Array, meu index: {my_index}")
+        shared_counter[my_index] = 0
+    
+    lines_list = []
+    
     for filename in files:
         try:
             with open(filename, 'r', encoding="utf-8") as f:
                 # print(f"\n### Ficheiro '{file}' ###")
                 text = f.read()
-                find_word_in_text(word, text, mode)
-                
-                # if mode is "i", put in the queue the counter after each file was analyzed    
-                if mode == "i":
-                    shared_found.put(shared_counter[my_index])
+                result = find_word_in_text(word, text, mode)
+                if mode == "l":
+                    lines_list.extend(result)
         except FileNotFoundError:
             print(f"Erro! Ficheiro '{filename}' não encontrado.")
     
     # if mode is "l", put in the queue the counter after all the files were analyzed
     if mode == "l":
-        shared_found.put(shared_counter[my_index])
+        for lines in lines_list:
+            shared_found.put(lines)
+
 # --------------------------------------------------  
+
+def signal_handler(signum, frame):
+    '''
+    '''
+    global terminate
+    terminate = True
+    print(f"Sinal {signum} recebido. Encerrando processos filhos...")
+    
+    for child in process_list:
+        if child.is_alive():
+            child.terminate()
+            child.join()  
             
+    os.exit(0)
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
+
 def pword(args: list):
     global shared_found
+    global shared_counter
     
     mode = args[0]
     n_of_processes = int(args[1])
@@ -308,12 +328,50 @@ def pword(args: list):
     files = args[3:]
     
     if len(files) == 1 and n_of_processes > 1: # 1 file and multiple processes
+        with open(files[0], "r") as f:
+            n_of_lines = f.readlines()
+            if n_of_processes > n_of_lines:
+                n_of_processes = n_of_lines
+        # after knowing exatcly the number of processes that there will be, creates the shared_counter depending on the mode chosen
+        mutex.acquire()
+        if mode == "c":
+            if shared_counter == None:
+                shared_counter = Value("i", 0)
+        else:
+            if shared_counter == None:
+                shared_counter = Array("i", [-1 for i in range(n_of_processes)])
+        mutex.release()
         divide_content(files[0], n_of_processes, word, mode)
+        
     else:
+        if n_of_processes > len(files):
+            n_of_processes = len(files)
+        mutex.acquire()
+        if mode == "c":
+            if shared_counter == None:
+                shared_counter = Value("i", 0)
+        else:
+            if shared_counter == None:
+                shared_counter = Array("i", [-1 for i in range(n_of_processes)])
+        mutex.release()
         assign_files_to_processes(files, n_of_processes, word, mode)    
 
-    while shared_found.full
-        print(shared_found.get())
+    for i in shared_counter:
+        print(f"(340)Shared counter i: {i}")
+    print("(335) vou entrar no loop")
+    
+    while not shared_found.empty():
+        item = shared_found.get()
+        print(f"Queue {item}")
+        
+    print("sai do loop")
+
+
+
+
+    
+    
+
 # --------------------------------------------------   
 
 def main(args):
