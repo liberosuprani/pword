@@ -92,7 +92,7 @@ def divide_content(filename: str, n_of_processes: int, word: str, mode: str):
             for p in process_list:
                 print(is_plummer_needed)
                 if is_plummer_needed:
-                    unclog.append(call_plummer())
+                    unclog.append(call_plummer()) if mode == "i" else unclog.extend(call_plummer())
                     print(len(unclog))
                 p.join()
                          
@@ -146,7 +146,7 @@ def assign_files_to_processes(files: list, n_of_processes: int, word: str, mode:
         for p in process_list:
             print(is_plummer_needed)
             if is_plummer_needed:
-                unclog.append(call_plummer())
+                unclog.append(call_plummer()) if mode == "i" else unclog.extend(call_plummer())
                 print(len(unclog))
             p.join()
     else:
@@ -187,10 +187,11 @@ def assign_files_to_processes(files: list, n_of_processes: int, word: str, mode:
         for p in process_list:
             print(is_plummer_needed)
             if is_plummer_needed:
-                unclog.append(call_plummer())
+                unclog.append(call_plummer()) if mode == "i" else unclog.extend(call_plummer())
                 print(len(unclog))
             p.join()
-    
+
+
 def find_my_index():
     """
     Finds the index of shared_found Array that this current Process must use (which is the first with the value -1), changing the value
@@ -273,7 +274,7 @@ def find_word_in_block(word: str, block: str, mode):
         list_of_results = []
         
         result = find_word_in_text(word, block, mode)
-    
+
         if mode == "l":
             list_of_results.extend(result)
         if mode == "i":
@@ -297,6 +298,7 @@ def find_word_in_files(word: str, files: list, mode):
         find_my_index()
         shared_counter[my_index] = 0
     
+    # list_of_results = set() if mode == "l" else []
     list_of_results = []
     
     if is_terminated.value == 0:
@@ -309,6 +311,7 @@ def find_word_in_files(word: str, files: list, mode):
                     result = find_word_in_text(word, text, mode)
                     if mode == "l":
                         list_of_results.extend(result)
+
                     if mode == "i":
                         list_of_results.append(result)
             except FileNotFoundError:
@@ -343,6 +346,7 @@ def call_plummer():
     while unclogged is None:
         if shared_found.qsize() > 0:
             unclogged = shared_found.get()
+            print(f"unclogged {unclogged}")
             return unclogged
         
 
@@ -407,8 +411,9 @@ def pword(args: list):
     
     if mode == "l":
         all_lines_set = []
+        print(f"eu sou o unclog: {unclog}")
         for line_set in unclog:
-            all_lines_set.extend(line_set)
+            all_lines_set.append(line_set)
             
         print(f"(PAI) Linhas encontradas: {len(all_lines_set)}")
         
