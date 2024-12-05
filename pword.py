@@ -5,16 +5,17 @@
 
 # ex: ./pword -m c -p 1 -w exemplo ficheiro1.txt
 
-import sys
+import sys, signal, os, re
 from multiprocessing import Process, Value, Array, Queue, Lock, Semaphore
 
-import signal, time, sys, os
+
 
 mutex = Lock()
 shared_counter = None
 shared_found = Queue()
 my_index = -1
 process_list = []
+is_terminated = Value("i", 0)
 
 
 class FileObj:
@@ -170,9 +171,11 @@ def assign_files_to_processes(files: list, n_of_processes: int, word: str, mode:
             p = Process(target=find_word_in_files, args=(word, sub_list, mode))
             process_list.append(p)
             p.start()
+            print("dps do start")
         for p in process_list:
+            print(f"oi sou o p {p}")
             p.join()
-  
+            print("to dps do join")
     
 def find_my_index():
     """
@@ -212,31 +215,31 @@ def find_word_in_text(word: str, text: str, mode):
         mutex.release()
         # mutex end
         return None
-       
+    
     elif mode == 'l':
-        lines_found = []
         # mutex start
         mutex.acquire()    
         split_text = text.strip().split("\n")
-        for line in split_text:
-            if word in line:
-                lines_found.append(line)   
+        print("consegui dividir vei")
+        lines_containing_word = [i for i in split_text if re.search(rf"{word}", i)]
+        
+        print(f"cehgou finalmente, tamanho eh : {len(lines_containing_word) }")
+        
         # increments the shared array in my_index position with the amount of lines found so far
-        shared_counter[my_index] += len(lines_found)       
+        shared_counter[my_index] += len(lines_containing_word)       
         mutex.release()
         # mutex end
         # return set(lines_found) //TODO tem que ver com a prof se precisa ser set ou não
-        return lines_found
+        return lines_containing_word
     
     elif mode == "i":
         mutex.acquire()
-        split_text = text.strip().split()
-        for w in split_text:
-            if word == w:
-                counter += 1
+
+        counter = len(re.findall(rf"\b{word}\b", text))
         
         # puts the counter in the queue after each file/block was analyzed    
         shared_found.put(counter)
+        print(f"Counter do -m i: {counter}")
         shared_counter[my_index] += counter
                 
         mutex.release()
@@ -244,27 +247,35 @@ def find_word_in_text(word: str, text: str, mode):
 
 
 def find_word_in_block(word: str, block: str, mode):
+    
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    
     global my_index
     global shared_counter
+    global is_terminated
     
     if mode != "c":
         find_my_index()
         shared_counter[my_index] = 0
-        
-    result = find_word_in_text(word, block, mode)
+       
+    if is_terminated.value == 0:
+        result = find_word_in_text(word, block, mode)
     
-    if mode == "l":
-        list_of_lines = []
-        list_of_lines.extend(result)
-        shared_found.put(list_of_lines)
+        if mode == "l":
+            list_of_lines = []
+            list_of_lines.extend(result)
+            shared_found.put(list_of_lines)
     
     
 def find_word_in_files(word: str, files: list, mode):
     '''
     Calls find_word_in_text for every file in files.
     '''
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    
     global my_index
     global shared_counter
+    global is_terminated
     
     if mode != "c":
         find_my_index()
@@ -272,43 +283,51 @@ def find_word_in_files(word: str, files: list, mode):
     
     list_of_lines = []
     
-    for filename in files:
-        try:
-            with open(filename, 'r', encoding="utf-8") as f:
-                text = f.read()
-                result = find_word_in_text(word, text, mode)
-                if mode == "l":
-                    list_of_lines.extend(result)
-        except FileNotFoundError:
-            print(f"Erro! Ficheiro '{filename}' não encontrado.")
+    if is_terminated.value == 0:
+        for filename in files:
+            if is_terminated.value == 1:
+                break
+            try:
+                with open(filename, 'r', encoding="utf-8") as f:
+                    text = f.read()
+                    result = find_word_in_text(word, text, mode)
+                    if mode == "l":
+                        list_of_lines.extend(result)
+            except FileNotFoundError:
+                print(f"Erro! Ficheiro '{filename}' não encontrado.")
     
-    # if mode is "l", put in the queue the counter after all the files were analyzed
-    if mode == "l":
-        shared_found.put(list_of_lines)
-
+        # if mode is "l", put in the queue the counter after all the files were analyzed
+        if mode == "l":
+            shared_found.put(list_of_lines)
+            
+    
 # --------------------------------------------------  
 
-def signal_handler(signum, frame):
+def terminate_early():
     '''
     '''
-    global terminate
-    terminate = True
-    print(f"Sinal {signum} recebido. Encerrando processos filhos...")
+    global mode
+    global shared_found
+    global is_terminated
+        
+    is_terminated.value = 1
+        
+    # if mode == "l":
+        #TODO do something
+        # print(f"Linhas encontradas: {shared_found}")
+        
+    # os.kill()
+    pass
     
-    for child in process_list:
-        if child.is_alive():
-            child.terminate()
-            child.join()  
-            
-    os.exit(0)
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
 
 def pword(args: list):
+    
+    signal.signal(signal.SIGINT, terminate_early)
+    
     global shared_found
     global shared_counter
     global n_of_processes
+    # global mode
     
     mode = args[0]
     n_of_processes = int(args[1])
@@ -319,7 +338,9 @@ def pword(args: list):
     
     if len(files) == 1 and n_of_processes > 1: # 1 file and multiple processes
         with open(files[0], "r") as f:
-            n_of_lines = len(f.readlines())
+            lines = f.readlines()
+            n_of_lines = len(lines)
+            print(f"Ultima linha: {lines[n_of_lines-1]}")
             
             if n_of_processes > n_of_lines:
                 n_of_processes = n_of_lines
@@ -351,6 +372,10 @@ def pword(args: list):
         
         assign_files_to_processes(files, n_of_processes, word, mode)    
 
+
+    if mode == "c":
+        print(f"(PAI) Ocorrências: {shared_counter.value}")
+    
     if mode == "l":
         all_lines_set = []
         while not shared_found.empty():
