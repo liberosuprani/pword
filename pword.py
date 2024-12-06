@@ -5,18 +5,28 @@
 
 # ex: ./pword -m c -p 1 -w exemplo ficheiro1.txt
 
-import sys, signal, os, re
-from multiprocessing import Process, Value, Array, Queue, Lock, Semaphore
+import sys, signal, re, time
+from multiprocessing import Process, Value, Array, Queue, Lock
 
-mutex = Lock()
+mutex_shared_found = Lock()
+mutex_shared_counter = Lock()
+
 shared_counter = None
 shared_found = Queue()
+
 my_index = -1
+
 process_list = []
+
 is_terminated = Value("i", 0)
+
 is_plummer_needed = False
 unclog = []
+
 mode = "c"
+
+already_processed = Value("i", 0)
+still_to_process = Value("i", 0)
 
 class FileObj:
     '''
@@ -39,11 +49,11 @@ def divide_content(filename: str, n_of_processes: int, word: str, mode: str):
     - Creation and start of n-processes, where each process deals with a part of the content of the file.
     '''
     
-    global shared_counter
-    global my_index
-    global process_list
-    global is_plummer_needed
-    global unclog
+    global shared_counter, my_index, process_list, is_plummer_needed, unclog
+    
+    mutex_shared_found.acquire()
+    still_to_process.value = n_of_processes
+    mutex_shared_found.release()
     
     try:
         with open(filename, 'r', encoding='utf-8') as f:
@@ -103,7 +113,7 @@ def join_unclogging():
         if is_plummer_needed:
             unclog.extend(call_plummer())
         p.join()
-        print("deu join")
+        # print("deu join")
     
                      
 def assign_files_to_processes(files: list, n_of_processes: int, word: str, mode: str):
@@ -136,7 +146,11 @@ def assign_files_to_processes(files: list, n_of_processes: int, word: str, mode:
             res += f.size
         return res
     
-    global shared_counter,my_index, process_list, is_plummer_needed, unclog
+    global shared_counter,my_index, process_list, is_plummer_needed, unclog, already_processed, still_to_process
+    
+    mutex_shared_found.acquire()
+    still_to_process.value = n_of_processes
+    mutex_shared_found.release()
     
     # creates and runs each process passing exactly 1 file to it
     if n_of_processes == len(files):
@@ -214,49 +228,39 @@ def find_word_in_text(word: str, text: str, mode):
     counter = 0
     
     if mode == 'c':
-        # mutex start
-        mutex.acquire()
+        # mutex_shared_counter start
+        mutex_shared_counter.acquire()
         shared_counter.value += text.count(word)
-        mutex.release()
-        # mutex end
+        mutex_shared_counter.release()
+        # mutex_shared_counter end
         return None
     
     elif mode == 'l':
-        mutex.acquire()  
-          
         split_text = text.strip().split("\n")
         
         # remove leading and trailing and spaces from all the lines
         split_text = [line.strip() for line in split_text]
         
-        lines_containing_word = set([i for i in split_text if re.search(rf"{word}", i)])
-        # print(f"lines_containing_word: {lines_containing_word}" )
-        
-        # increments the shared array in my_index position with the amount of lines found so far
-        # shared_counter[my_index] += len(lines_containing_word)      
+        lines_containing_word = set([i for i in split_text if re.search(rf"{word}", i)])  
          
-        mutex.release()
-       
         return lines_containing_word
     
     elif mode == "i":
-        mutex.acquire()
+        mutex_shared_counter.acquire()
 
         counter = len(re.findall(rf"\b{word}\b", text))
         
         # puts the counter in the queue after each file/block was analyzed    
         shared_counter[my_index] += counter
                 
-        mutex.release()
+        mutex_shared_counter.release()
         return counter
 
 
 def find_word_in_block(word: str, block: str, mode): # TODO
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     
-    global my_index
-    global shared_counter
-    global is_terminated
+    global my_index, shared_counter, is_terminated, shared_found, already_processed, still_to_process
     
     if mode != "c":
         find_my_index()
@@ -275,6 +279,11 @@ def find_word_in_block(word: str, block: str, mode): # TODO
         
         shared_found.put(list_of_results)
         
+    mutex_shared_found.acquire()
+    already_processed.value += 1
+    still_to_process.value -= 1
+    mutex_shared_found.release()
+        
     
     
 def find_word_in_files(word: str, files: list, mode):
@@ -283,7 +292,7 @@ def find_word_in_files(word: str, files: list, mode):
     '''
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     
-    global my_index, shared_counter, is_terminated
+    global my_index, shared_counter, is_terminated, already_processed
     
     if mode != "c":
         find_my_index()
@@ -291,14 +300,14 @@ def find_word_in_files(word: str, files: list, mode):
     
     list_of_results = [] if mode == "i" else set()
     if is_terminated.value == 0:
-        print(f"tipo do list_of_results: {type(list_of_results)}")
+        # print(f"tipo do list_of_results: {type(list_of_results)}")
         
         for filename in files:
             if is_terminated.value == 1:
-                print("vou dar break por causa do terminate")
+                # print("vou dar break por causa do terminate")
                 break
             try:
-                print("comecei a analisar um ficheiro")
+                # print("comecei a analisar um ficheiro")
                 with open(filename, 'r', encoding="utf-8") as f:
                     text = f.read()
                     result = find_word_in_text(word, text, mode)
@@ -311,6 +320,13 @@ def find_word_in_files(word: str, files: list, mode):
                     # for example [1, 1, 3]
                     if mode == "i":
                         list_of_results.append(result)
+                        
+                mutex_shared_found.acquire()
+                already_processed.value += 1
+                still_to_process.value -= 1
+                mutex_shared_found.release()
+                
+                    
             except FileNotFoundError:
                 print(f"Erro! Ficheiro '{filename}' não encontrado.")
     
@@ -328,9 +344,10 @@ def terminate_early(sig, frame):
     print("Encerrando os processos filhos...")
     join_unclogging()
     
-    for i in range(len(shared_counter)):
-        if shared_counter[i] == -1:
-            shared_counter[i] = 0
+    if mode != "c":
+        for i in range(len(shared_counter)):
+            if shared_counter[i] == -1:
+                shared_counter[i] = 0
         
     if mode == "c":
         print(f"(TERMINATED) Ocorrências: {shared_counter.value}")
@@ -357,14 +374,36 @@ def call_plummer():
             unclogged = shared_found.get()
             # print(f"unclogged {unclogged}")
             return unclogged
-        
+       
+
+def write_logs(file):
+    # print(f"entrou na funcao write_logs. ficheiro: {file}")
+    # t = time.gmtime()
+    # current_time = time.time()*1000000 - time_of_start
+    
+    # mutex_shared_counter.acquire()
+    # log_text = f"{t.tm_mday}/{t.tm_mon}/{t.tm_year}-{t.tm_hour}:{t.tm_min}:{t.tm_sec} {int(current_time)} {shared_counter.value if isinstance(shared_counter, Value) else sum(shared_counter[:])}"
+    # mutex_shared_counter.release()
+    
+    # mutex_shared_found.acquire()
+    # log_text += f" {already_processed.value} {still_to_process.value}"
+    # mutex_shared_found.release()
+    
+    # if file == "stdout":
+    #     print(log_text)
+    # else:
+    #     with open(file, "a") as f:
+    #         f.write(log_text)
+    pass
+
+time_of_start = 0
 
 def pword(args: list):
     
-    signal.signal(signal.SIGINT, terminate_early)
     
     global shared_found, shared_counter, n_of_processes, is_plummer_needed, unclog, mode
-    # global mode
+    
+    time_of_start = time.time()*1000000
     
     mode = args[0]
     n_of_processes = int(args[1])
@@ -372,6 +411,13 @@ def pword(args: list):
     partial_results_file = args[3]
     word = args[4]
     files = args[5:]
+    
+    # print(f"{interval} - {partial_results_file}")
+    
+    signal.signal(signal.SIGINT, terminate_early)
+    signal.signal(signal.SIGALRM, lambda sig, frame: write_logs(partial_results_file))
+    # signal.signal(signal.SIGALRM, write_logs)
+    signal.setitimer(signal.ITIMER_REAL, 0.0001, interval)
     
     if len(files) == 1 and n_of_processes > 1: # 1 file and multiple processes
         with open(files[0], "r") as f:
@@ -381,7 +427,7 @@ def pword(args: list):
             if n_of_processes > n_of_lines:
                 n_of_processes = n_of_lines
                 
-        mutex.acquire()
+        mutex_shared_counter.acquire()
         if mode == "c":
             if shared_counter == None:
                 shared_counter = Value("i", 0)
@@ -389,7 +435,7 @@ def pword(args: list):
             if shared_counter == None:
                 is_plummer_needed = True
                 shared_counter = Array("i", [-1 for i in range(n_of_processes)])
-        mutex.release()
+        mutex_shared_counter.release()
 
         divide_content(files[0], n_of_processes, word, mode)
         # TODO do something else
@@ -398,7 +444,7 @@ def pword(args: list):
         if n_of_processes > len(files):
             n_of_processes = len(files)
             
-        mutex.acquire()
+        mutex_shared_counter.acquire()
         if mode == "c":
             if shared_counter == None:
                 shared_counter = Value("i", 0)
@@ -406,7 +452,7 @@ def pword(args: list):
             if shared_counter == None:
                 is_plummer_needed = True
                 shared_counter = Array("i", [-1 for i in range(n_of_processes)])
-        mutex.release()
+        mutex_shared_counter.release()
         
         assign_files_to_processes(files, n_of_processes, word, mode)    
 
@@ -423,7 +469,7 @@ def pword(args: list):
         all_occurrences = unclog
         # print(all_occurrences)
         print(f"(PAI) Todas as ocorrências: {sum(all_occurrences)}")
-        print(f"shared_counter: {sum(shared_counter)}")
+        # print(f"shared_counter: {sum(shared_counter)}")
                 
 # --------------------------------------------------   
 
