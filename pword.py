@@ -5,6 +5,7 @@
 
 # ex: ./pword -m c -p 1 -w exemplo ficheiro1.txt
 
+import os
 import sys, signal, re, time
 from multiprocessing import Process, Value, Array, Queue, Lock
 
@@ -241,8 +242,8 @@ def find_word_in_text(word: str, text: str, mode):
         # remove leading and trailing and spaces from all the lines
         split_text = [line.strip() for line in split_text]
         
-        lines_containing_word = set([i for i in split_text if re.search(rf"{word}", i)])  
-         
+        lines_containing_word = [i for i in split_text if re.search(rf"{word}", i)]
+
         return lines_containing_word
     
     elif mode == "i":
@@ -254,6 +255,7 @@ def find_word_in_text(word: str, text: str, mode):
         shared_counter[my_index] += counter
                 
         mutex_shared_counter.release()
+        print("dei release")
         return counter
 
 
@@ -267,12 +269,12 @@ def find_word_in_block(word: str, block: str, mode): # TODO
         shared_counter[my_index] = 0
        
     if is_terminated.value == 0:
-        list_of_results = [] if mode == "i" else set()
+        list_of_results = [] 
         
         result = find_word_in_text(word, block, mode)
 
         if mode == "l":
-            list_of_results.update(result)
+            list_of_results = result
         if mode == "i":
             list_of_results.append(result)
             shared_counter[my_index] = len(list_of_results)
@@ -298,7 +300,7 @@ def find_word_in_files(word: str, files: list, mode):
         find_my_index()
         shared_counter[my_index] = 0
     
-    list_of_results = [] if mode == "i" else set()
+    list_of_results = [] 
     if is_terminated.value == 0:
         # print(f"tipo do list_of_results: {type(list_of_results)}")
         
@@ -314,7 +316,7 @@ def find_word_in_files(word: str, files: list, mode):
                     
                     # for example: [line1, line2, line3, ...]
                     if mode == "l":
-                        list_of_results.update(result)
+                        list_of_results = result
                         shared_counter[my_index] = len(list_of_results)
 
                     # for example [1, 1, 3]
@@ -326,7 +328,6 @@ def find_word_in_files(word: str, files: list, mode):
                 still_to_process.value -= 1
                 mutex_shared_found.release()
                 
-                    
             except FileNotFoundError:
                 print(f"Erro! Ficheiro '{filename}' não encontrado.")
     
@@ -377,23 +378,21 @@ def call_plummer():
        
 
 def write_logs(file):
-    # print(f"entrou na funcao write_logs. ficheiro: {file}")
-    # t = time.gmtime()
-    # current_time = time.time()*1000000 - time_of_start
+    print(f"entrou na funcao write_logs. ficheiro: {file}")
+    t = time.gmtime()
+    current_time = time.time()*1000000 - time_of_start
     
-    # mutex_shared_counter.acquire()
-    # log_text = f"{t.tm_mday}/{t.tm_mon}/{t.tm_year}-{t.tm_hour}:{t.tm_min}:{t.tm_sec} {int(current_time)} {shared_counter.value if isinstance(shared_counter, Value) else sum(shared_counter[:])}"
-    # mutex_shared_counter.release()
+    mutex_shared_counter.acquire()
+    log_text = f"{t.tm_mday}/{t.tm_mon}/{t.tm_year}-{t.tm_hour}:{t.tm_min}:{t.tm_sec} {int(current_time)} {0 if shared_counter is None else (shared_counter.value if mode == "c" else sum(shared_counter[:]))}"
+    mutex_shared_counter.release()
     
-    # mutex_shared_found.acquire()
-    # log_text += f" {already_processed.value} {still_to_process.value}"
-    # mutex_shared_found.release()
+    log_text += f" {already_processed.value} {still_to_process.value}"
     
-    # if file == "stdout":
-    #     print(log_text)
-    # else:
-    #     with open(file, "a") as f:
-    #         f.write(log_text)
+    if file == "stdout":
+        print(log_text)
+    else:
+        with open(file, "a") as f:
+            f.write(log_text)
     pass
 
 time_of_start = 0
@@ -417,7 +416,7 @@ def pword(args: list):
     signal.signal(signal.SIGINT, terminate_early)
     signal.signal(signal.SIGALRM, lambda sig, frame: write_logs(partial_results_file))
     # signal.signal(signal.SIGALRM, write_logs)
-    signal.setitimer(signal.ITIMER_REAL, 0.0001, interval)
+    signal.setitimer(signal.ITIMER_REAL, interval, interval)
     
     if len(files) == 1 and n_of_processes > 1: # 1 file and multiple processes
         with open(files[0], "r") as f:
