@@ -6,5 +6,5 @@ jooj
 print 
 sistemas operativos
 print
-jooj perdi print
+jooj perdi printsistemas sistemas
 aa

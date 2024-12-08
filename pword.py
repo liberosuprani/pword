@@ -3,9 +3,6 @@
 # Aluno 2: Ravi Mughal (fc62504)
 # Aluno 3: Ricardo Avelãs (fc62257)
 
-# ex: ./pword -m c -p 1 -w exemplo ficheiro1.txt
-
-import os
 import sys, signal, re, time
 from multiprocessing import Process, Value, Array, Queue, Lock
 
@@ -265,12 +262,8 @@ def find_word(word: str, text: str, mode):
         return counter
     
     elif mode == "i":
-        mutex_shared_counter.acquire()
-
         # regex for isolated word
         counter = len(re.findall(rf"\b{word}\b", text))
-         
-        mutex_shared_counter.release()
         return counter
 
 # TODO
@@ -369,9 +362,7 @@ def find_in_files(word: str, files: list, mode):
                 
             mutex_logs.acquire()
             already_processed.value += 1
-            print("a")
             still_to_process.value -= 1
-            print("b")
             mutex_logs.release()
 
         if mode != "c":
@@ -398,15 +389,15 @@ def terminate_early(sig, frame):
                 shared_counter[i] = 0
         
     if mode == "c":
-        print(f"(TERMINATED) Ocorrências: {shared_counter.value}")
+        print(f"(TERMINADO) Ocorrências: {shared_counter.value}")
     
     if mode == "l":
         all_lines_set = unclogged_data  
-        print(f"(TERMINATED) Linhas encontradas: {len(all_lines_set)}")
+        print(f"(TERMINADO) Linhas encontradas: {len(all_lines_set)}")
         
     elif mode == "i":
         all_occurrences = unclogged_data
-        print(f"(TERMINATED) Todas as ocorrências: {sum(all_occurrences)}")
+        print(f"(TERMINADO) Todas as ocorrências: {sum(all_occurrences)}")
         
     sys.exit(0)
     

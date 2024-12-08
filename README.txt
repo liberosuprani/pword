@@ -35,8 +35,8 @@ O critério para a divisão é o número de linhas em cada ficheiro.
     quando os dados passados para a Queue shared_found sejam muito grandes e não haja um Queue.get() imediato. Ela coloca o que foi
     retornado da call_plummer na variável global unclogged_data.
    
-    - A função call_plummer corre até que consiga fazer get() dos dados presentes na Queue shared_found, retornando estes dados.
+    - A função call_plummer corre até que consiga fazer get dos dados presentes na Queue shared_found, retornando estes dados.
 
 - Para a sincronização, utilizamos mutex.
 
-- O timestamp utilizado para os logs foi: dd/mm/yy-hh/mm/ss
+- O timestamp utilizado para os logs foi: dd/mm/yy-hh/mm/ss, igual ao enunciado.
