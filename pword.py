@@ -26,6 +26,7 @@ is_plummer_needed = False
 unclogged_data = []
 
 mode = "c"
+partial_results_file = ""
 
 already_processed = Value("i", 0)
 still_to_process = Value("i", 0)
@@ -336,7 +337,6 @@ def find_in_files(word: str, files: list, mode):
             try:
                 with open(filename, 'r', encoding="utf-8") as f:
                     text = f.read()
-                    
                     if mode == "l":
                         result = find_lines(word, text)
                         list_of_results.extend(result)
@@ -398,7 +398,7 @@ def terminate_early(sig, frame):
     elif mode == "i":
         all_occurrences = unclogged_data
         print(f"(TERMINADO) Todas as ocorrências: {sum(all_occurrences)}")
-        
+    
     sys.exit(0)
     
 
@@ -415,7 +415,7 @@ def call_plummer():
             return unclogged_data_local
        
 
-def write_logs(file):
+def write_logs(file, finished=False):
     """
     Writes logs to a given file.
     """
@@ -424,6 +424,7 @@ def write_logs(file):
     t = time.gmtime()
     current_time = time.time()*1000000 - time_of_start
     
+    
     mutex_shared_counter.acquire()
     log_text = f"{t.tm_mday}/{t.tm_mon}/{t.tm_year}-{t.tm_hour}:{t.tm_min}:{t.tm_sec} " 
     log_text += f"{int(current_time)} " 
@@ -431,8 +432,13 @@ def write_logs(file):
     mutex_shared_counter.release()
     
     log_text += f"{already_processed.value} " 
-    log_text += f"{still_to_process.value}\n"
+    log_text += f"{still_to_process.value}"
     
+    if finished:
+        log_text += " (finished) "
+   
+    log_text += "\n"
+   
     if file == "stdout":
         print(log_text)
     else:
@@ -445,7 +451,7 @@ time_of_start = 0
 
 def pword(args: list):
     
-    global shared_found, shared_counter, n_of_processes, is_plummer_needed, unclogged_data, mode, time_of_start
+    global shared_found, shared_counter, n_of_processes, is_plummer_needed, unclogged_data, mode, time_of_start, partial_results_file
     
     time_of_start = time.time()*1000000
     
@@ -516,6 +522,7 @@ def pword(args: list):
         all_occurrences = unclogged_data
         print(f"Ocorrências: {sum(all_occurrences)}")
                 
+    write_logs(partial_results_file, True)
 # --------------------------------------------------   
 
 if __name__ == "__main__":
