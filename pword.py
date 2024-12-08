@@ -9,7 +9,7 @@ import os
 import sys, signal, re, time
 from multiprocessing import Process, Value, Array, Queue, Lock
 
-mutex_shared_found = Lock()
+mutex_logs = Lock()
 mutex_shared_counter = Lock()
 
 shared_counter = None
@@ -17,12 +17,16 @@ shared_found = Queue()
 
 my_index = -1
 
+# will store the child processes needed
 process_list = []
 
+# starts as 0, will be changed to 1 in case SIGINT is triggered
 is_terminated = Value("i", 0)
 
 is_plummer_needed = False
-unclog = []
+
+# data retrieved from shared_found queue
+unclogged_data = []
 
 mode = "c"
 
@@ -50,11 +54,11 @@ def divide_content(filename: str, n_of_processes: int, word: str, mode: str):
     - Creation and start of n-processes, where each process deals with a part of the content of the file.
     '''
     
-    global shared_counter, my_index, process_list, is_plummer_needed, unclog
+    global shared_counter, my_index, process_list, is_plummer_needed, unclogged_data
     
-    mutex_shared_found.acquire()
+    mutex_logs.acquire()
     still_to_process.value = n_of_processes
-    mutex_shared_found.release()
+    mutex_logs.release()
     
     try:
         with open(filename, 'r', encoding='utf-8') as f:
@@ -62,7 +66,7 @@ def divide_content(filename: str, n_of_processes: int, word: str, mode: str):
             n_of_lines = len(lines)
             
             if n_of_lines == 0:
-                find_word_in_text(word, "", mode)
+                find_word(word, "", mode)
                 return
             
             division = n_of_lines // n_of_processes
@@ -95,7 +99,7 @@ def divide_content(filename: str, n_of_processes: int, word: str, mode: str):
                 for line in lines_args:
                     text_block += line
                 
-                p = Process(target=find_word_in_block, args=(word, text_block, mode))
+                p = Process(target=find_in_block, args=(word, text_block, mode))
                 process_list.append(p)
                 
                 p.start()
@@ -106,17 +110,7 @@ def divide_content(filename: str, n_of_processes: int, word: str, mode: str):
     except FileNotFoundError:
         print(f"Erro! Ficheiro '{filename}' não encontrado.")    
    
-    
-def join_unclogging():
-    global process_list, is_plummer_needed, unclog, is_terminated
-    
-    for p in process_list:
-        if is_plummer_needed:
-            unclog.extend(call_plummer())
-        p.join()
-        # print("deu join")
-    
-                     
+   
 def assign_files_to_processes(files: list, n_of_processes: int, word: str, mode: str):
     '''
     Divides the files among n-processes.
@@ -147,16 +141,16 @@ def assign_files_to_processes(files: list, n_of_processes: int, word: str, mode:
             res += f.size
         return res
     
-    global shared_counter,my_index, process_list, is_plummer_needed, unclog, already_processed, still_to_process
+    global shared_counter,my_index, process_list, is_plummer_needed, unclogged_data, already_processed, still_to_process
     
-    mutex_shared_found.acquire()
-    still_to_process.value = n_of_processes
-    mutex_shared_found.release()
+    mutex_logs.acquire()
+    still_to_process.value = len(files)
+    mutex_logs.release()
     
     # creates and runs each process passing exactly 1 file to it
     if n_of_processes == len(files):
         for i in range(n_of_processes):
-            p = Process(target=find_word_in_files, args=(word, [files[i]], mode))
+            p = Process(target=find_in_files, args=(word, [files[i]], mode))
             process_list.append(p)
             p.start()
             
@@ -192,30 +186,68 @@ def assign_files_to_processes(files: list, n_of_processes: int, word: str, mode:
         files_sub_list = [[f.name for f in file_group] for file_group in file_group_list]
         
         for sub_list in files_sub_list:
-            p = Process(target=find_word_in_files, args=(word, sub_list, mode))
+            p = Process(target=find_in_files, args=(word, sub_list, mode))
             process_list.append(p)
             p.start()
             
         join_unclogging()
-
-
+    
+    
+def join_unclogging():
+    """
+    Iterates over the list of processes and joins them to the parent only after the queue is free
+    """
+    global process_list, is_plummer_needed, unclogged_data, is_terminated
+    
+    for p in process_list:
+        # plummer is needed when modes are either l or i
+        if is_plummer_needed:
+            unclogged_data.extend(call_plummer())
+        p.join()
+    
+                     
 def find_my_index():
     """
     Finds the index of shared_found Array that this current Process must use (which is the first with the value -1), changing the value
-    of global variable my_index to this index
+    of global variable my_index to this index and changing from -1 to 0
     """
-    global my_index
+    global my_index, shared_counter
     
     found_my_index = False
     my_index = 0
     my_index_iterator = 0
-    while not found_my_index:
+    while not found_my_index and my_index_iterator < len(shared_counter):
         found_my_index = True if shared_counter[my_index_iterator] == -1 else False
         my_index = my_index_iterator 
         my_index_iterator += 1
+        
+    if found_my_index:
+        shared_counter[my_index] = 0
+   
+   
+def find_lines(word: str, text: str):
+    '''
+    Finds a given word in a given text.
+    
+    Requires:
+    - word, text, str
+    
+    Ensures:
+    - a list of lines that contain the given word
+    '''
+    global shared_counter, shared_found, my_index
+
+    split_text = text.strip().split("\n")
+    
+    # remove leading and trailing and spaces from all the lines
+    split_text = [line.strip() for line in split_text]
+    
+    lines_containing_word = [i for i in split_text if re.search(rf"{word}", i)]
+
+    return lines_containing_word
        
             
-def find_word_in_text(word: str, text: str, mode): 
+def find_word(word: str, text: str, mode): 
     '''
     Finds a given word in a given text.
     
@@ -223,74 +255,76 @@ def find_word_in_text(word: str, text: str, mode):
     - word, text, mode str
     
     Ensures:
-    - Print of the amount of occurrences of the word in the text, depending of the mode chosen. 
+    - 
     '''
     global shared_counter, shared_found, my_index
     counter = 0
     
     if mode == 'c':
-        # mutex_shared_counter start
-        mutex_shared_counter.acquire()
-        shared_counter.value += text.count(word)
-        mutex_shared_counter.release()
-        # mutex_shared_counter end
-        return None
-    
-    elif mode == 'l':
-        split_text = text.strip().split("\n")
-        
-        # remove leading and trailing and spaces from all the lines
-        split_text = [line.strip() for line in split_text]
-        
-        lines_containing_word = [i for i in split_text if re.search(rf"{word}", i)]
-
-        return lines_containing_word
+        counter = text.count(word)
+        return counter
     
     elif mode == "i":
         mutex_shared_counter.acquire()
 
+        # regex for isolated word
         counter = len(re.findall(rf"\b{word}\b", text))
-        
-        # puts the counter in the queue after each file/block was analyzed    
-        shared_counter[my_index] += counter
-                
+         
         mutex_shared_counter.release()
-        print("dei release")
         return counter
 
-
-def find_word_in_block(word: str, block: str, mode): # TODO
+# TODO
+def find_in_block(word: str, block: str, mode): 
+    """
+    Calls find_word for a block of text
+    
+    Requires: 
+    - word str
+    """
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     
     global my_index, shared_counter, is_terminated, shared_found, already_processed, still_to_process
     
-    if mode != "c":
-        find_my_index()
-        shared_counter[my_index] = 0
-       
     if is_terminated.value == 0:
+        if mode != "c":
+            find_my_index()
+        
         list_of_results = [] 
         
-        result = find_word_in_text(word, block, mode)
-
         if mode == "l":
-            list_of_results = result
-        if mode == "i":
-            list_of_results.append(result)
+            result = find_lines(word, block)
+            list_of_results.extend(result)
+            mutex_shared_counter.acquire()
             shared_counter[my_index] = len(list_of_results)
+            mutex_shared_counter.release()
+                    
+        else:
+            # amount of occurrences of that word
+            result = find_word(word, block, mode)
         
+            if mode == "c":
+                mutex_shared_counter.acquire()
+                shared_counter.value += result
+                mutex_shared_counter.release()
+            if mode == "i":
+                list_of_results.append(result)
+                
+                mutex_shared_counter.acquire()
+                shared_counter[my_index] = sum(list_of_results)
+                mutex_shared_counter.release()
+                
+        mutex_logs.acquire()
+        already_processed.value += 1
+        still_to_process.value -= 1
+        mutex_logs.release()
+        
+    if mode != "c":
         shared_found.put(list_of_results)
-        
-    mutex_shared_found.acquire()
-    already_processed.value += 1
-    still_to_process.value -= 1
-    mutex_shared_found.release()
-        
+ 
     
-    
-def find_word_in_files(word: str, files: list, mode):
+def find_in_files(word: str, files: list, mode):
     '''
-    Calls find_word_in_text for every file in files.
+    Calls find_word (if mode == c or mode == l), or find_lines (if mode == l) for every file in files.
     '''
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     
@@ -298,51 +332,64 @@ def find_word_in_files(word: str, files: list, mode):
     
     if mode != "c":
         find_my_index()
-        shared_counter[my_index] = 0
     
-    list_of_results = [] 
     if is_terminated.value == 0:
-        # print(f"tipo do list_of_results: {type(list_of_results)}")
+        list_of_results = [] 
         
         for filename in files:
             if is_terminated.value == 1:
-                # print("vou dar break por causa do terminate")
                 break
+            
             try:
-                # print("comecei a analisar um ficheiro")
                 with open(filename, 'r', encoding="utf-8") as f:
                     text = f.read()
-                    result = find_word_in_text(word, text, mode)
                     
-                    # for example: [line1, line2, line3, ...]
                     if mode == "l":
-                        list_of_results = result
+                        result = find_lines(word, text)
+                        list_of_results.extend(result)
+                        mutex_shared_counter.acquire()
                         shared_counter[my_index] = len(list_of_results)
-
-                    # for example [1, 1, 3]
-                    if mode == "i":
-                        list_of_results.append(result)
-                        
-                mutex_shared_found.acquire()
-                already_processed.value += 1
-                still_to_process.value -= 1
-                mutex_shared_found.release()
-                
+                        mutex_shared_counter.release()
+                    
+                    else:
+                        result = find_word(word, text, mode)
+                    
+                        if mode == "c":
+                            mutex_shared_counter.acquire()
+                            shared_counter.value += result
+                            mutex_shared_counter.release()
+                        if mode == "i":
+                            list_of_results.append(result)
+                            
+                            mutex_shared_counter.acquire()
+                            shared_counter[my_index] = sum(list_of_results)
+                            mutex_shared_counter.release()           
             except FileNotFoundError:
                 print(f"Erro! Ficheiro '{filename}' não encontrado.")
-    
-        shared_found.put(list_of_results)
+                
+            mutex_logs.acquire()
+            already_processed.value += 1
+            print("a")
+            still_to_process.value -= 1
+            print("b")
+            mutex_logs.release()
+
+        if mode != "c":
+            shared_found.put(list_of_results)
     
 # --------------------------------------------------  
 
 def terminate_early(sig, frame):
     '''
+    Handles the SIGINT signal.
     '''
-    global shared_found, shared_counter, is_terminated, unclog
+    global shared_found, shared_counter, is_terminated, unclogged_data
         
     is_terminated.value = 1
     
     print("Encerrando os processos filhos...")
+    
+    # consumes the queue
     join_unclogging()
     
     if mode != "c":
@@ -354,53 +401,60 @@ def terminate_early(sig, frame):
         print(f"(TERMINATED) Ocorrências: {shared_counter.value}")
     
     if mode == "l":
-        all_lines_set = unclog  
+        all_lines_set = unclogged_data  
         print(f"(TERMINATED) Linhas encontradas: {len(all_lines_set)}")
-        print(f"shared_counter: {sum(shared_counter)}")
         
     elif mode == "i":
-        all_occurrences = unclog
+        all_occurrences = unclogged_data
         print(f"(TERMINATED) Todas as ocorrências: {sum(all_occurrences)}")
-        print(f"shared_counter: {sum(shared_counter)}")
         
-    
-    print("acabou a funcao terminate_early")
     sys.exit(0)
     
 
 def call_plummer():
-    unclogged = None
-    while unclogged is None:
+    """
+    Runs until the shared_found queue has data, and frees it.
+    
+    Ensures: content in shared_found
+    """
+    unclogged_dataged = None
+    while unclogged_dataged is None:
         if shared_found.qsize() > 0:
-            unclogged = shared_found.get()
-            # print(f"unclogged {unclogged}")
-            return unclogged
+            unclogged_dataged = shared_found.get()
+            return unclogged_dataged
        
 
 def write_logs(file):
-    print(f"entrou na funcao write_logs. ficheiro: {file}")
+    """
+    Writes logs to a given file.
+    """
+    global time_of_start
+    
     t = time.gmtime()
     current_time = time.time()*1000000 - time_of_start
     
     mutex_shared_counter.acquire()
-    log_text = f"{t.tm_mday}/{t.tm_mon}/{t.tm_year}-{t.tm_hour}:{t.tm_min}:{t.tm_sec} {int(current_time)} {0 if shared_counter is None else (shared_counter.value if mode == "c" else sum(shared_counter[:]))}"
+    log_text = f"{t.tm_mday}/{t.tm_mon}/{t.tm_year}-{t.tm_hour}:{t.tm_min}:{t.tm_sec} " 
+    log_text += f"{int(current_time)} " 
+    log_text += f"{0 if shared_counter is None else (shared_counter.value if mode == 'c' else (sum(shared_counter[:]) if sum(shared_counter[:]) > 0 else 0))} "
     mutex_shared_counter.release()
     
-    log_text += f" {already_processed.value} {still_to_process.value}"
+    log_text += f"{already_processed.value} " 
+    log_text += f"{still_to_process.value}\n"
     
     if file == "stdout":
         print(log_text)
     else:
         with open(file, "a") as f:
             f.write(log_text)
-    pass
+
 
 time_of_start = 0
 
+
 def pword(args: list):
     
-    
-    global shared_found, shared_counter, n_of_processes, is_plummer_needed, unclog, mode
+    global shared_found, shared_counter, n_of_processes, is_plummer_needed, unclogged_data, mode, time_of_start
     
     time_of_start = time.time()*1000000
     
@@ -411,14 +465,18 @@ def pword(args: list):
     word = args[4]
     files = args[5:]
     
-    # print(f"{interval} - {partial_results_file}")
-    
+    # terminate_early will be called when there is a SIGINT
     signal.signal(signal.SIGINT, terminate_early)
+    
+    if partial_results_file != "stdout":
+        f = open(partial_results_file, "w")
+        f.close()
+    # sets a timer that runs the function write_logs, passing partial_results_file to it, every interval
     signal.signal(signal.SIGALRM, lambda sig, frame: write_logs(partial_results_file))
-    # signal.signal(signal.SIGALRM, write_logs)
     signal.setitimer(signal.ITIMER_REAL, interval, interval)
     
-    if len(files) == 1 and n_of_processes > 1: # 1 file and multiple processes
+    # 1 file and multiple processes, has to call divide_content
+    if len(files) == 1 and n_of_processes > 1: 
         with open(files[0], "r") as f:
             lines = f.readlines()
             n_of_lines = len(lines)
@@ -437,8 +495,8 @@ def pword(args: list):
         mutex_shared_counter.release()
 
         divide_content(files[0], n_of_processes, word, mode)
-        # TODO do something else
-        
+    
+    # no content will be divided, assign_files_to_precesses will be called
     else:
         if n_of_processes > len(files):
             n_of_processes = len(files)
@@ -457,23 +515,17 @@ def pword(args: list):
 
 
     if mode == "c":
-        print(f"(PAI) Ocorrências: {shared_counter.value}")
+        print(f"Ocorrências: {shared_counter.value}")
     
     if mode == "l":
-        all_lines_set = unclog  
-        print(f"(PAI) Linhas encontradas: {len(all_lines_set)}")
-        print(f"shared_counter: {sum(shared_counter)}")
+        all_lines_set = unclogged_data  
+        print(f"Linhas encontradas: {len(all_lines_set)}")
         
     elif mode == "i":
-        all_occurrences = unclog
-        # print(all_occurrences)
-        print(f"(PAI) Todas as ocorrências: {sum(all_occurrences)}")
-        # print(f"shared_counter: {sum(shared_counter)}")
+        all_occurrences = unclogged_data
+        print(f"Ocorrências: {sum(all_occurrences)}")
                 
 # --------------------------------------------------   
 
-def main(args):
-    pword(args)
-
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    pword(sys.argv[1:])
