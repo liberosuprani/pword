@@ -424,7 +424,6 @@ def write_logs(file, finished=False):
     t = time.gmtime()
     current_time = time.time()*1000000 - time_of_start
     
-    
     mutex_shared_counter.acquire()
     log_text = f"{t.tm_mday}/{t.tm_mon}/{t.tm_year}-{t.tm_hour}:{t.tm_min}:{t.tm_sec} " 
     log_text += f"{int(current_time)} " 
