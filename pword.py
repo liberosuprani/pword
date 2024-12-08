@@ -417,11 +417,11 @@ def call_plummer():
     
     Ensures: content in shared_found
     """
-    unclogged_dataged = None
-    while unclogged_dataged is None:
+    unclogged_data_local = None
+    while unclogged_data_local is None:
         if shared_found.qsize() > 0:
-            unclogged_dataged = shared_found.get()
-            return unclogged_dataged
+            unclogged_data_local = shared_found.get()
+            return unclogged_data_local
        
 
 def write_logs(file):

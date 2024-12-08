@@ -8,6 +8,7 @@
 1) ./pword -p 3 -w sistemas f1.txt 
 2) ./pword -m l -w operativos f1.txt f2.txt
 3) ./pword -m i -p 2 -w informatica f1.txt f2.txt
+4) ./pword -m l -p 1 -i 5 -d logs.txt -w print f1.txt f2.txt f3.txt
 
 --------------------------------------------------------
 ### Limitações da implementação:
@@ -28,3 +29,14 @@ O critério para a divisão é o número de linhas em cada ficheiro.
 --------------------------------------------------------
 ### Outras informações pertinentes:
 - Adicionamos uma opção -h para ajuda no comando pword, que dá um exemplo de comando para executar o programa e informa sobre as flags.
+
+- Para comunicação, foram utilizadas as classes Value e Array (memória partilhada) e Queue (troca de mensagens)
+    - Utilizamos a função join_unclogging, que dá join nos processos chamando a função call_plummer, para que assim não haja deadlock
+    quando os dados passados para a Queue shared_found sejam muito grandes e não haja um Queue.get() imediato. Ela coloca o que foi
+    retornado da call_plummer na variável global unclogged_data.
+   
+    - A função call_plummer corre até que consiga fazer get() dos dados presentes na Queue shared_found, retornando estes dados.
+
+- Para a sincronização, utilizamos mutex.
+
+- O timestamp utilizado para os logs foi: dd/mm/yy-hh/mm/ss
