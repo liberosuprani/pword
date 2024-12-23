@@ -1,3 +1,11 @@
+Projeto desenvolvido na cadeira de Sistemas Operativos no 3º semestre da faculdade.
+Consiste em um programa em python, invocado por um comando em shell, que procura a ocorrência de uma palavra dada em ficheiros dados.
+O projeto foi feito para consolidar os conhecimentos adquiridos em assuntos como multiprocessamento/multithreading, sincronização e comunicação de processos, entre outros.
+
+Possui 3 opções:
+- l: retorna a quantidade de linhas com ocorrências da palavra.
+- c: retorna a quantidade de ocorrências da palavra.
+- i: retorna a quantidade de ocorrências da palavra em que aparece isoladamente.
 
 --------------------------------------------------------
 ### Grupo: SO-TI-04
@@ -11,6 +19,8 @@
 2) ./pword -m l -w operativos f1.txt f2.txt
 3) ./pword -m i -p 2 -w informatica f1.txt f2.txt
 4) ./pword -m l -p 1 -i 5 -d logs.txt -w print f1.txt f2.txt f3.txt
+
+Há também a opção -h, para ajuda.
 
 --------------------------------------------------------
 ### Abordagem para a divisão dos ficheiros:
