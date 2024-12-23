@@ -3,6 +3,7 @@
 # Aluno 2: Ravi Mughal (fc62504)
 # Aluno 3: Ricardo Avelãs (fc62257)
 
+import os
 import sys, signal, re, time
 from multiprocessing import Process, Value, Array, Queue, Lock
 
@@ -30,6 +31,7 @@ partial_results_file = ""
 
 already_processed = Value("i", 0)
 still_to_process = Value("i", 0)
+amount_of_plummers_to_be_called = Value("i", 0)
 
 class FileObj:
     '''
@@ -195,14 +197,22 @@ def join_unclogging():
     """
     Iterates over the list of processes and joins them to the parent only after the queue is free
     """
-    global process_list, is_plummer_needed, unclogged_data, is_terminated
+    global process_list, is_plummer_needed, unclogged_data, is_terminated, amount_of_plummers_to_be_called
     
-    for p in process_list:
-        # plummer is needed when modes are either l or i
+    # stores how many processes have there are. later, this will be good to
+    # check how many have been processed, i.e called the plummer, 
+    # so if SIGINT is called it will only proceed after all processes have finished and called the plummer
+    amount_of_plummers_to_be_called.value = len(process_list)
+   
+    for i in range(len(process_list)):
         if is_plummer_needed:
             unclogged_data.extend(call_plummer())
+        # updates how many processes are yet to call the plummer
+        amount_of_plummers_to_be_called.value -= 1
+    for p in process_list:
+        # plummer is needed when modes are either l or i
         p.join()
-    
+        
                      
 def find_my_index():
     """
@@ -277,9 +287,10 @@ def find_in_block(word: str, block: str, mode):
     """
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     
-    global my_index, shared_counter, is_terminated, shared_found, already_processed, still_to_process
+    global my_index, shared_counter, is_terminated, shared_found, already_processed, still_to_process, amount_of_plummers_to_be_called
     
     if is_terminated.value == 0:
+        
         if mode != "c":
             find_my_index()
         
@@ -322,7 +333,7 @@ def find_in_files(word: str, files: list, mode):
     '''
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     
-    global my_index, shared_counter, is_terminated, already_processed
+    global my_index, shared_counter, is_terminated, already_processed, amount_of_plummers_to_be_called
     
     if mode != "c":
         find_my_index()
@@ -332,9 +343,8 @@ def find_in_files(word: str, files: list, mode):
         
         for filename in files:
             if is_terminated.value == 1:
-                break
-            
-            try:
+                break 
+            try: 
                 with open(filename, 'r', encoding="utf-8") as f:
                     text = f.read()
                     if mode == "l":
@@ -374,15 +384,18 @@ def terminate_early(sig, frame):
     '''
     Handles the SIGINT signal.
     '''
-    global shared_found, shared_counter, is_terminated, unclogged_data
+    global shared_found, shared_counter, is_terminated, unclogged_data, amount_of_plummers_to_be_called
         
     is_terminated.value = 1
     
     print("Encerrando os processos filhos...")
     
-    # consumes the queue
-    join_unclogging()
-    
+    if amount_of_plummers_to_be_called.value != 0:
+        i = amount_of_plummers_to_be_called.value
+        while i != 0:
+            unclogged_data.extend(call_plummer())
+            i -= 1
+        
     if mode != "c":
         for i in range(len(shared_counter)):
             if shared_counter[i] == -1:
@@ -413,7 +426,6 @@ def call_plummer():
         if shared_found.qsize() > 0:
             unclogged_data_local = shared_found.get()
             return unclogged_data_local
-       
 
 def write_logs(file, finished=False):
     """
