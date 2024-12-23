@@ -1,7 +1,9 @@
+
+--------------------------------------------------------
 ### Grupo: SO-TI-04
-# Aluno 1: Libero Suprani (fc62220)
-# Aluno 2: Ravi Mughal (fc62504)
-# Aluno 3: Ricardo Avelãs (fc62257)
+# Aluno 1: Libero Suprani 
+# Aluno 2: Ravi Mughal 
+# Aluno 3: Ricardo Avelãs 
 
 --------------------------------------------------------
 ### Exemplos de comandos para executar o pwordcount:
@@ -9,10 +11,6 @@
 2) ./pword -m l -w operativos f1.txt f2.txt
 3) ./pword -m i -p 2 -w informatica f1.txt f2.txt
 4) ./pword -m l -p 1 -i 5 -d logs.txt -w print f1.txt f2.txt f3.txt
-
---------------------------------------------------------
-### Limitações da implementação:
-- Não há nenhuma limitação de nosso conhecimento
 
 --------------------------------------------------------
 ### Abordagem para a divisão dos ficheiros:
@@ -39,4 +37,4 @@ O critério para a divisão é o número de linhas em cada ficheiro.
 
 - Para a sincronização, utilizamos mutex.
 
-- O timestamp utilizado para os logs foi: dd/mm/yy-hh/mm/ss, igual ao enunciado.
+- O timestamp utilizado para os logs foi: dd/mm/yy-hh/mm/ss
